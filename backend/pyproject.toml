@@ -1,0 +1,6 @@
+[project]
+name = "financial-research-agent"
+version = "0.1.0"
+description = "LangChain-based Financial Research Agent with RAG, live market data, and structured analysis"
+requires-python = ">=3.11"
+dependencies = []
