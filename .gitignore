@@ -9,6 +9,7 @@ venv/
 # Environment
 .env
 backend/.env
+.secrets
 
 # ChromaDB
 backend/chromadb_storage/

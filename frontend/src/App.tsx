@@ -1,18 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+import ThemeToggle from "./components/ThemeToggle";
 import ChatView from "./components/ChatView";
 import { chat, ingest } from "./api/client";
 
-type Message = { role: "user" | "assistant"; content: string };
+export type Message = { role: "user" | "assistant"; content: string };
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
 
   async function handleSend(text: string) {
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -39,35 +35,45 @@ export default function App() {
         ...prev,
         {
           role: "assistant",
-          content: `📄 Ingested \`${result.filename}\` — ${result.chunks_ingested} chunks indexed. You can now query these documents.`,
+          content: `\u{1F4C4} Ingested \`${result.filename}\` \u2014 ${result.chunks_ingested} chunks indexed. You can now query these documents.`,
         },
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setLoading(false);
-      e.target.value = "";
     }
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: 24 }}>
-      <h1>Financial Research Agent</h1>
-      <div style={{ marginBottom: 12 }}>
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={handleFileUpload}
-          disabled={loading}
-        />
-        <span style={{ marginLeft: 8, fontSize: 12, color: "#666" }}>
-          Upload a PDF to add to the knowledge base
-        </span>
-      </div>
-      <ChatView messages={messages} loading={loading} onSend={handleSend} />
-      {error && (
-        <div style={{ color: "red", marginTop: 8, fontSize: 14 }}>{error}</div>
-      )}
+    <div className="app-layout">
+      <header className="header">
+        <div className="header-left">
+          <div className="header-logo">F</div>
+          <span className="header-title">Financial Research Terminal</span>
+        </div>
+        <div className="header-right">
+          <label className="upload-btn" title="Upload PDF">
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              disabled={loading}
+              style={{ display: "none" }}
+            />
+            {"\uD83D\uDCCE"}<span> Upload PDF</span>
+          </label>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <ChatView
+        messages={messages}
+        loading={loading}
+        error={error}
+        onSend={handleSend}
+        onDismissError={() => setError(null)}
+      />
     </div>
   );
 }

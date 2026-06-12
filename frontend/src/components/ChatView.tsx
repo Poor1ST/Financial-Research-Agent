@@ -1,18 +1,28 @@
 import { useRef, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
-
-type Message = { role: "user" | "assistant"; content: string };
+import type { Message } from "../App";
 
 interface Props {
   messages: Message[];
   loading: boolean;
+  error: string | null;
   onSend: (text: string) => void;
+  onDismissError: () => void;
 }
 
-export default function ChatView({ messages, loading, onSend }: Props) {
+const HINTS = [
+  "What's AAPL's current price and RSI?",
+  "Analyze TSLA with technical indicators",
+  "Search financial news for oil prices",
+  "Give me a full analysis report on MSFT",
+  "What's the market outlook for gold?",
+];
+
+export default function ChatView({ messages, loading, error, onSend, onDismissError }: Props) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,80 +35,95 @@ export default function ChatView({ messages, loading, onSend }: Props) {
     setInput("");
   }
 
+  function handleHint(hint: string) {
+    onSend(hint);
+  }
+
+  const hasMessages = messages.length > 0;
+
   return (
-    <div
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: 8,
-        display: "flex",
-        flexDirection: "column",
-        height: 500,
-      }}
-    >
-      <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-        {messages.length === 0 && (
-          <p style={{ color: "#888", textAlign: "center" }}>
-            Ask about a stock, upload a PDF, or request an analysis report.
-          </p>
+    <>
+      <div className="chat-area">
+        {!hasMessages && !loading && (
+          <div className="empty-state">
+            <div className="empty-state-icon">{"\uD83D\uDCCA"}</div>
+            <h2>Financial Research Terminal</h2>
+            <p>Ask about any stock, commodity, or market condition. Get real-time data, technical analysis, and structured reports to support your decisions.</p>
+            <div className="empty-state-hints">
+              {HINTS.map((hint) => (
+                <button key={hint} className="hint-chip" onClick={() => handleHint(hint)}>
+                  {hint}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
+
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              marginBottom: 12,
-              textAlign: msg.role === "user" ? "right" : "left",
-            }}
-          >
-            <div
-              style={{
-                display: "inline-block",
-                padding: "8px 14px",
-                borderRadius: 12,
-                background: msg.role === "user" ? "#007bff" : "#f0f0f0",
-                color: msg.role === "user" ? "#fff" : "#000",
-                maxWidth: "80%",
-                textAlign: "left",
-              }}
-            >
-              <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
-                {msg.content}
-              </ReactMarkdown>
+          <div key={i} className={`message-row ${msg.role}`}>
+            <div className="message-bubble">
+              {msg.role === "assistant" ? (
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}
+
         {loading && (
-          <div style={{ color: "#888", fontStyle: "italic" }}>Thinking...</div>
+          <div className="message-row assistant">
+            <div className="loading-dots">
+              Synthesizing data<span>.</span><span>.</span><span>.</span>
+            </div>
+          </div>
         )}
+
+        {error && (
+          <div className="error-bar">
+            {error}
+            <button
+              onClick={onDismissError}
+              style={{ background: "none", border: "none", color: "inherit", marginLeft: 12, cursor: "pointer", fontWeight: 600 }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "flex", borderTop: "1px solid #ddd", padding: 8 }}
-      >
+
+      <form className="input-bar" onSubmit={handleSubmit}>
+        <div className="input-bar-left">
+          <label className="attach-btn" title="Upload PDF">
+            <input
+              type="file"
+              accept=".pdf"
+              style={{ display: "none" }}
+              disabled={loading}
+            />
+            {"\uD83D\uDCCE"}
+          </label>
+        </div>
         <input
-          ref={(el) => el?.focus()}
+          ref={inputRef}
+          className="input-bar-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about a stock..."
+          placeholder="Ask about a stock, commodity, or market condition..."
           disabled={loading}
-          style={{ flex: 1, padding: 8, borderRadius: 4, border: "1px solid #ccc" }}
         />
         <button
           type="submit"
+          className="send-btn"
           disabled={loading || !input.trim()}
-          style={{
-            marginLeft: 8,
-            padding: "8px 16px",
-            borderRadius: 4,
-            border: "none",
-            background: loading ? "#ccc" : "#007bff",
-            color: "#fff",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
         >
-          Send
+          {loading ? "Analyzing..." : "Send"}
         </button>
       </form>
-    </div>
+    </>
   );
 }

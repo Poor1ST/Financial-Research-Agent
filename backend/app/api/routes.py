@@ -28,11 +28,11 @@ async def ingest(file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported")
 
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File exceeds 10 MB limit")
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        content = await file.read()
-        if len(content) > 10 * 1024 * 1024:
-            os.unlink(tmp.name)
-            raise HTTPException(400, "File exceeds 10 MB limit")
         tmp.write(content)
         tmp_path = tmp.name
 
