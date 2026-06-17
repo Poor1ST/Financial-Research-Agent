@@ -1,10 +1,12 @@
 import os
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
-
-load_dotenv()
+from app.api.auth import router as auth_router
 
 app = FastAPI(title="Financial Research Agent")
 
@@ -20,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 
 if __name__ == "__main__":

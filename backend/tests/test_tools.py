@@ -1,6 +1,7 @@
 import pytest
 from app.agent.tools import (
     fetch_price_and_indicators,
+    fetch_price_history,
     search_financial_news,
     query_documents,
     generate_analysis_report,
@@ -39,6 +40,22 @@ class TestQueryDocuments:
             assert result == "No relevant documents found."
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+class TestFetchPriceHistory:
+    def test_valid_ticker_returns_chart_request_marker(self):
+        result = fetch_price_history.invoke({"ticker": "AAPL"})
+        assert "Apple Inc." in result or "AAPL" in result
+        assert "Latest:" in result
+        assert "RSI" in result
+        assert "SMA" in result
+        assert "[CHART_REQUEST:" in result
+        assert '"ticker": "AAPL"' in result or '"ticker":"AAPL"' in result
+        assert '"period": "6mo"' in result or '"period":"6mo"' in result
+
+    def test_invalid_ticker_returns_error(self):
+        result = fetch_price_history.invoke({"ticker": "ZZZZZZ"})
+        assert "Error" in result or "No data" in result
 
 
 class TestGenerateAnalysisReport:

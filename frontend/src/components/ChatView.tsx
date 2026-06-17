@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
+import StockChart from "./StockChart";
 import type { Message } from "../App";
+import type { ChartPeriod } from "../api/client";
 
 interface Props {
   messages: Message[];
@@ -11,12 +13,33 @@ interface Props {
   onDismissError: () => void;
 }
 
+type MessagePart = string | { type: "chart"; ticker: string; period: ChartPeriod };
+
+function parseMessage(content: string): MessagePart[] {
+  const parts: MessagePart[] = [];
+  const regex = /\[CHART_REQUEST:\{([^}]+)\}\]/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > last) parts.push(content.slice(last, match.index));
+    try {
+      const raw = JSON.parse(`{${match[1]}}`);
+      parts.push({ type: "chart", ticker: raw.ticker, period: raw.period || "6mo" });
+    } catch {
+      parts.push(match[0]);
+    }
+    last = match.index + match[0].length;
+  }
+  if (last < content.length) parts.push(content.slice(last));
+  return parts.length > 0 ? parts : [content];
+}
+
 const HINTS = [
   "What's AAPL's current price and RSI?",
+  "Show me AAPL price chart with indicators",
   "Analyze TSLA with technical indicators",
   "Search financial news for oil prices",
   "Give me a full analysis report on MSFT",
-  "What's the market outlook for gold?",
 ];
 
 export default function ChatView({ messages, loading, error, onSend, onDismissError }: Props) {
@@ -41,6 +64,17 @@ export default function ChatView({ messages, loading, error, onSend, onDismissEr
 
   const hasMessages = messages.length > 0;
 
+  function renderPart(part: MessagePart, idx: number) {
+    if (typeof part === "string") {
+      return (
+        <ReactMarkdown key={idx} rehypePlugins={[rehypeSanitize]}>
+          {part}
+        </ReactMarkdown>
+      );
+    }
+    return <StockChart key={idx} ticker={part.ticker} period={part.period} />;
+  }
+
   return (
     <>
       <div className="chat-area">
@@ -48,7 +82,7 @@ export default function ChatView({ messages, loading, error, onSend, onDismissEr
           <div className="empty-state">
             <div className="empty-state-icon">{"\uD83D\uDCCA"}</div>
             <h2>Financial Research Terminal</h2>
-            <p>Ask about any stock, commodity, or market condition. Get real-time data, technical analysis, and structured reports to support your decisions.</p>
+            <p>Ask about any stock, commodity, or market condition. Get real-time data, interactive charts, technical analysis, and structured reports to support your decisions.</p>
             <div className="empty-state-hints">
               {HINTS.map((hint) => (
                 <button key={hint} className="hint-chip" onClick={() => handleHint(hint)}>
@@ -62,13 +96,9 @@ export default function ChatView({ messages, loading, error, onSend, onDismissEr
         {messages.map((msg, i) => (
           <div key={i} className={`message-row ${msg.role}`}>
             <div className="message-bubble">
-              {msg.role === "assistant" ? (
-                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
-                  {msg.content}
-                </ReactMarkdown>
-              ) : (
-                msg.content
-              )}
+              {msg.role === "assistant"
+                ? parseMessage(msg.content).map((part, j) => renderPart(part, j))
+                : msg.content}
             </div>
           </div>
         ))}

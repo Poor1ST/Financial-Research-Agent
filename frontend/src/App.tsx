@@ -1,28 +1,32 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useAuth } from "./context/AuthContext";
 import ThemeToggle from "./components/ThemeToggle";
 import ChatView from "./components/ChatView";
-import { chat, ingest } from "./api/client";
+import AuthForm from "./components/AuthForm";
+import SessionSidebar from "./components/SessionSidebar";
+import { ingest } from "./api/client";
 
 export type Message = { role: "user" | "assistant"; content: string };
 
-export default function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+function MainApp() {
+  const { currentSessionId, messages, sendMessage } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadMessages, setUploadMessages] = useState<Message[]>([]);
 
-  async function handleSend(text: string) {
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+  useEffect(() => { setUploadMessages([]); }, [currentSessionId]);
+
+  const handleSend = useCallback(async (text: string) => {
     setLoading(true);
     setError(null);
     try {
-      const { response } = await chat(text);
-      setMessages((prev) => [...prev, { role: "assistant", content: response }]);
+      await sendMessage(text);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setLoading(false);
     }
-  }
+  }, [sendMessage]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -31,12 +35,9 @@ export default function App() {
     setError(null);
     try {
       const result = await ingest(file);
-      setMessages((prev) => [
+      setUploadMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: `\u{1F4C4} Ingested \`${result.filename}\` \u2014 ${result.chunks_ingested} chunks indexed. You can now query these documents.`,
-        },
+        { role: "assistant", content: `\u{1F4C4} Ingested \`${result.filename}\` — ${result.chunks_ingested} chunks indexed. You can now query these documents.` },
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -45,35 +46,61 @@ export default function App() {
     }
   }
 
-  return (
-    <div className="app-layout">
-      <header className="header">
-        <div className="header-left">
-          <div className="header-logo">F</div>
-          <span className="header-title">Financial Research Terminal</span>
-        </div>
-        <div className="header-right">
-          <label className="upload-btn" title="Upload PDF">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              disabled={loading}
-              style={{ display: "none" }}
-            />
-            {"\uD83D\uDCCE"}<span> Upload PDF</span>
-          </label>
-          <ThemeToggle />
-        </div>
-      </header>
+  const chatMessages: Message[] = [...uploadMessages, ...messages.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }))];
 
-      <ChatView
-        messages={messages}
-        loading={loading}
-        error={error}
-        onSend={handleSend}
-        onDismissError={() => setError(null)}
-      />
+  return (
+    <div className="app-with-sidebar">
+      <SessionSidebar />
+      <div className="main-content">
+        <header className="header">
+          <div className="header-left">
+            <div className="header-logo">F</div>
+            <span className="header-title">Financial Research Terminal</span>
+          </div>
+          <div className="header-right">
+            <label className="upload-btn" title="Upload PDF">
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handleFileUpload}
+                disabled={loading}
+                style={{ display: "none" }}
+              />
+              {"\uD83D\uDCCE"}<span> Upload PDF</span>
+            </label>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {currentSessionId ? (
+          <ChatView
+            messages={chatMessages}
+            loading={loading}
+            error={error}
+            onSend={handleSend}
+            onDismissError={() => setError(null)}
+          />
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-icon">{"\uD83D\uDCCA"}</div>
+            <h2>Select or create a chat session</h2>
+            <p>Choose a session from the sidebar or click "+ New Chat" to get started.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+export default function App() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <AuthForm />;
+  }
+
+  return <MainApp />;
 }

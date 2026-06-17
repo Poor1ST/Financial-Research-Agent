@@ -4,6 +4,7 @@ from langchain.memory import ConversationBufferWindowMemory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from app.agent.tools import (
     fetch_price_and_indicators,
+    fetch_price_history,
     search_financial_news,
     query_documents,
     generate_analysis_report,
@@ -13,7 +14,7 @@ from langchain_core.tools import Tool
 import os
 
 
-def build_agent(session_id: str = "default"):
+def build_agent(session_id: str = "default", initial_messages: list[tuple[str, str]] | None = None):
     llm = ChatGroq(
         model="llama-3.1-8b-instant",
         temperature=0.3,
@@ -22,6 +23,7 @@ def build_agent(session_id: str = "default"):
 
     tools = [
         fetch_price_and_indicators,
+        fetch_price_history,
         search_financial_news,
         query_documents,
         generate_analysis_report,
@@ -31,7 +33,15 @@ def build_agent(session_id: str = "default"):
         memory_key="chat_history",
         k=10,
         return_messages=True,
+        output_key="output",
     )
+
+    if initial_messages:
+        for role, content in initial_messages:
+            if role == "user":
+                memory.chat_memory.add_user_message(content)
+            else:
+                memory.chat_memory.add_ai_message(content)
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
@@ -49,6 +59,7 @@ def build_agent(session_id: str = "default"):
         verbose=True,
         handle_parsing_errors=True,
         max_iterations=10,
+        return_intermediate_steps=True,
     )
 
     return agent_executor

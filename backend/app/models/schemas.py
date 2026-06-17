@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -26,3 +27,48 @@ class IngestionResponse(BaseModel):
     status: str
     chunks_ingested: int
     filename: str
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: str
+    password: str = Field(min_length=6)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    model_config = {"from_attributes": True}
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+
+class SessionCreate(BaseModel):
+    pass
+
+
+class SessionResponse(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class MessageResponse(BaseModel):
+    id: int
+    session_id: str
+    role: str
+    content: str
+    timestamp: datetime
+    model_config = {"from_attributes": True}
