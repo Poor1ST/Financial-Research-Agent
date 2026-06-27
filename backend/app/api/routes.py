@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.schemas import ChatRequest, ChatResponse, IngestionResponse
 from app.models.database import get_db, Message as MessageModel, Session as SessionModel, User as UserModel
 from app.agent.agent import build_agent
-from app.api.auth import get_current_user
+from app.api.auth import get_optional_user
 
 router = APIRouter()
 
@@ -28,34 +28,38 @@ def get_agent(session_id: str, user_id: int, initial_messages: list[tuple[str, s
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    session_obj = db.query(SessionModel).filter(
-        SessionModel.id == req.session_id,
-        SessionModel.user_id == current_user.id,
-    ).first()
-    if not session_obj:
-        raise HTTPException(404, "Session not found")
+    if current_user:
+        session_obj = db.query(SessionModel).filter(
+            SessionModel.id == req.session_id,
+            SessionModel.user_id == current_user.id,
+        ).first()
+        if not session_obj:
+            raise HTTPException(404, "Session not found")
 
-    db_message = MessageModel(session_id=req.session_id, role="user", content=req.message)
-    db.add(db_message)
-    db.commit()
+        db_message = MessageModel(session_id=req.session_id, role="user", content=req.message)
+        db.add(db_message)
+        db.commit()
 
-    if session_obj.title == "New Chat":
-        session_obj.title = (req.message[:50] + "...") if len(req.message) > 50 else req.message
-    session_obj.updated_at = datetime.now(timezone.utc)
-    db.commit()
+        if session_obj.title == "New Chat":
+            session_obj.title = (req.message[:50] + "...") if len(req.message) > 50 else req.message
+        session_obj.updated_at = datetime.now(timezone.utc)
+        db.commit()
 
-    loaded = db.query(MessageModel).filter(
-        MessageModel.session_id == req.session_id,
-    ).order_by(MessageModel.timestamp.desc()).limit(10).all()
-    loaded.reverse()
-    initial = [(m.role, m.content) for m in loaded]
+        loaded = db.query(MessageModel).filter(
+            MessageModel.session_id == req.session_id,
+        ).order_by(MessageModel.timestamp.desc()).limit(10).all()
+        loaded.reverse()
+        initial = [(m.role, m.content) for m in loaded]
 
-    agent = get_agent(req.session_id, current_user.id, initial)
+        agent = get_agent(req.session_id, current_user.id, initial)
+    else:
+        initial = [(m["role"], m["content"]) for m in (req.history or [])]
+        agent = build_agent("guest", initial)
+
     result = agent.invoke({"input": req.message})
-
     response_text = result["output"]
 
     for step in result.get("intermediate_steps", []):
@@ -66,8 +70,9 @@ async def chat(
                 response_text += "\n\n" + marker_match.group(0)
             break
 
-    db.add(MessageModel(session_id=req.session_id, role="assistant", content=response_text))
-    db.commit()
+    if current_user:
+        db.add(MessageModel(session_id=req.session_id, role="assistant", content=response_text))
+        db.commit()
 
     return ChatResponse(response=response_text)
 
@@ -75,7 +80,6 @@ async def chat(
 @router.post("/ingest", response_model=IngestionResponse)
 async def ingest(
     file: UploadFile = File(...),
-    current_user: UserModel = Depends(get_current_user),
 ):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported")

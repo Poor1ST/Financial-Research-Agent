@@ -72,6 +72,23 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> UserModel | None:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    try:
+        payload = jwt.decode(auth_header[7:], SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+        return db.query(UserModel).filter(UserModel.id == int(user_id)).first()
+    except JWTError:
+        return None
+
+
 @router.get("/google/login")
 async def google_login():
     state = secrets.token_urlsafe(32)
@@ -163,14 +180,19 @@ async def google_callback(code: str, state: str, error: str = None, db: Session 
 
 @router.post("/register", response_model=TokenResponse)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(UserModel).filter(
-        (UserModel.username == user_data.username) | (UserModel.email == user_data.email)
-    ).first()
+    existing = db.query(UserModel).filter(UserModel.email == user_data.email).first()
     if existing:
-        raise HTTPException(400, "Username or email already taken")
+        raise HTTPException(400, "Email already taken")
+
+    base_username = user_data.email.split("@")[0]
+    username = base_username
+    suffix = 1
+    while db.query(UserModel).filter(UserModel.username == username).first():
+        username = f"{base_username}{suffix}"
+        suffix += 1
 
     user = UserModel(
-        username=user_data.username,
+        username=username,
         email=user_data.email,
         password_hash=get_password_hash(user_data.password),
     )
@@ -189,7 +211,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(UserModel).filter(
-        (UserModel.username == login_data.username) | (UserModel.email == login_data.username)
+        (UserModel.email == login_data.email) | (UserModel.username == login_data.email)
     ).first()
 
     if not user or not user.password_hash or not verify_password(login_data.password, user.password_hash):

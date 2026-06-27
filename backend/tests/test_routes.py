@@ -1,8 +1,5 @@
+import io
 import pytest
-
-
-def register_user(client, username="tester", email="t@test.com", password="secret123"):
-    return client.post("/api/auth/register", json={"username": username, "email": email, "password": password}).json()
 
 
 def auth_header(token):
@@ -14,6 +11,12 @@ class TestHealth:
         resp = client.get("/api/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+class TestIngest:
+    def test_ingest_without_auth_returns_validation_not_401(self, client):
+        resp = client.post("/api/ingest")
+        assert resp.status_code != 401
 
 
 class TestChart:

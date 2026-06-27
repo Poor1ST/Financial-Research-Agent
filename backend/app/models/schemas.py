@@ -5,7 +5,8 @@ from typing import Optional
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = "default"
+    session_id: str | None = None
+    history: list[dict] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -30,13 +31,12 @@ class IngestionResponse(BaseModel):
 
 
 class UserCreate(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
     email: str
     password: str = Field(min_length=6)
 
 
 class UserLogin(BaseModel):
-    username: str
+    email: str
     password: str
 
 

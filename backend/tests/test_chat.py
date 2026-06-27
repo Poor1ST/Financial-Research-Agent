@@ -1,8 +1,8 @@
 import pytest
 
 
-def register_user(client, username="alice", email="a@b.com", password="secret123"):
-    return client.post("/api/auth/register", json={"username": username, "email": email, "password": password}).json()
+def register_user(client, email="a@b.com", password="secret123"):
+    return client.post("/api/auth/register", json={"email": email, "password": password}).json()
 
 
 def auth_header(token):
@@ -14,14 +14,18 @@ def create_session(client, token):
 
 
 class TestChatAuth:
-    def test_chat_without_token_returns_401(self, client):
-        resp = client.post("/api/chat", json={"message": "hello", "session_id": "any"})
-        assert resp.status_code == 401
+    def test_guest_can_chat_without_token(self, client):
+        resp = client.post("/api/chat", json={"message": "Say exactly: hello world"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "response" in data
+        assert len(data["response"]) > 0
 
-    def test_chat_with_invalid_token_returns_401(self, client):
-        resp = client.post("/api/chat", json={"message": "hello", "session_id": "any"},
+    def test_chat_with_invalid_token_returns_200_for_guest(self, client):
+        resp = client.post("/api/chat", json={"message": "Say exactly: hello world"},
                            headers={"Authorization": "Bearer invalid"})
-        assert resp.status_code == 401
+        assert resp.status_code == 200
+        assert len(resp.json()["response"]) > 0
 
 
 class TestChatSessionValidation:
@@ -32,12 +36,37 @@ class TestChatSessionValidation:
         assert resp.status_code == 404
 
     def test_cannot_chat_another_users_session(self, client):
-        alice = register_user(client, "alice", "a@b.com")
-        bob = register_user(client, "bob", "b@b.com", "pass456")
+        alice = register_user(client, "a@b.com")
+        bob = register_user(client, "b@b.com", "pass456")
         alice_session = create_session(client, alice["access_token"])
         resp = client.post("/api/chat", json={"message": "hello", "session_id": alice_session["id"]},
                            headers=auth_header(bob["access_token"]))
         assert resp.status_code == 404
+
+
+class TestGuestChat:
+    def test_guest_with_history_returns_200(self, client):
+        resp = client.post("/api/chat", json={
+            "message": "What is 2+2?",
+            "history": [
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello"},
+            ]
+        })
+        assert resp.status_code == 200
+        assert len(resp.json()["response"]) > 0
+
+    def test_guest_without_session_id_works(self, client):
+        resp = client.post("/api/chat", json={"message": "What is 2+2?"})
+        assert resp.status_code == 200
+        assert len(resp.json()["response"]) > 0
+
+    def test_guest_message_not_in_any_session(self, client):
+        client.post("/api/chat", json={"message": "What is 2+2?"})
+        data = register_user(client)
+        h = auth_header(data["access_token"])
+        sessions = client.get("/api/auth/sessions", headers=h).json()
+        assert len(sessions) == 0
 
 
 class TestChatFunctionality:
@@ -65,7 +94,6 @@ class TestChatFunctionality:
         h = auth_header(data["access_token"])
         s = create_session(client, data["access_token"])
         assert s["title"] == "New Chat"
-        client.post("/api/chat", json={"message": "What is Apple stock price?", "session_id": s["id"]}, headers=h)
+        client.post("/api/chat", json={"message": "What is 2+2?", "session_id": s["id"]}, headers=h)
         updated = client.get("/api/auth/sessions", headers=h).json()
         assert updated[0]["title"] != "New Chat"
-        assert "Apple" in updated[0]["title"] or "What" in updated[0]["title"]

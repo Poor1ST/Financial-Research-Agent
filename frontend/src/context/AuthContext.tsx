@@ -5,8 +5,8 @@ interface AuthContextType {
   user: UserResponse | null;
   token: string | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => void;
   sessions: SessionResponse[];
   currentSessionId: string | null;
@@ -65,13 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMessages([]);
   }
 
-  async function login(username: string, password: string) {
-    const res = await loginUser(username, password);
+  async function login(email: string, password: string) {
+    const res = await loginUser(email, password);
     storeAuth(res.access_token, res.user);
   }
 
-  async function register(username: string, email: string, password: string) {
-    const res = await registerUser(username, email, password);
+  async function register(email: string, password: string) {
+    const res = await registerUser(email, password);
     storeAuth(res.access_token, res.user);
   }
 

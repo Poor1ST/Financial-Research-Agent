@@ -1,15 +1,23 @@
 import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "./context/AuthContext";
+import { guestChat, ingest } from "./api/client";
 import ThemeToggle from "./components/ThemeToggle";
 import ChatView from "./components/ChatView";
-import AuthForm from "./components/AuthForm";
+import AuthModal from "./components/AuthModal";
 import SessionSidebar from "./components/SessionSidebar";
-import { ingest } from "./api/client";
 
 export type Message = { role: "user" | "assistant"; content: string };
 
-function MainApp() {
-  const { currentSessionId, messages, sendMessage } = useAuth();
+function MainApp({
+  guestMessages,
+  setGuestMessages,
+  setShowAuthModal,
+}: {
+  guestMessages: Message[];
+  setGuestMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setShowAuthModal: (v: boolean) => void;
+}) {
+  const { user, currentSessionId, messages, sendMessage } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadMessages, setUploadMessages] = useState<Message[]>([]);
@@ -20,13 +28,23 @@ function MainApp() {
     setLoading(true);
     setError(null);
     try {
-      await sendMessage(text);
+      if (user) {
+        await sendMessage(text);
+      } else {
+        const history = guestMessages.map((m) => ({ role: m.role, content: m.content }));
+        const res = await guestChat(text, history);
+        setGuestMessages((prev) => [
+          ...prev,
+          { role: "user", content: text },
+          { role: "assistant", content: res.response },
+        ]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally {
       setLoading(false);
     }
-  }, [sendMessage]);
+  }, [user, sendMessage, guestMessages, setGuestMessages]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -37,7 +55,7 @@ function MainApp() {
       const result = await ingest(file);
       setUploadMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `\u{1F4C4} Ingested \`${result.filename}\` — ${result.chunks_ingested} chunks indexed. You can now query these documents.` },
+        { role: "assistant", content: `\u{1F4C4} Ingested \`${result.filename}\` — ${result.chunks_ingested} chunks indexed.` },
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -46,14 +64,16 @@ function MainApp() {
     }
   }
 
-  const chatMessages: Message[] = [...uploadMessages, ...messages.map((m) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }))];
+  const chatMessages: Message[] = user
+    ? [...uploadMessages, ...messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))]
+    : [...uploadMessages, ...guestMessages];
 
   return (
     <div className="app-with-sidebar">
-      <SessionSidebar />
+      <SessionSidebar
+        setGuestMessages={setGuestMessages}
+        setShowAuthModal={setShowAuthModal}
+      />
       <div className="main-content">
         <header className="header">
           <div className="header-left">
@@ -75,7 +95,13 @@ function MainApp() {
           </div>
         </header>
 
-        {currentSessionId ? (
+        {user && !currentSessionId ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">{"\uD83D\uDCCA"}</div>
+            <h2>Select or create a chat session</h2>
+            <p>Choose a session from the sidebar or click "+ New Chat" to get started.</p>
+          </div>
+        ) : (
           <ChatView
             messages={chatMessages}
             loading={loading}
@@ -83,12 +109,6 @@ function MainApp() {
             onSend={handleSend}
             onDismissError={() => setError(null)}
           />
-        ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">{"\uD83D\uDCCA"}</div>
-            <h2>Select or create a chat session</h2>
-            <p>Choose a session from the sidebar or click "+ New Chat" to get started.</p>
-          </div>
         )}
       </div>
     </div>
@@ -96,11 +116,17 @@ function MainApp() {
 }
 
 export default function App() {
-  const { user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [guestMessages, setGuestMessages] = useState<Message[]>([]);
 
-  if (!user) {
-    return <AuthForm />;
-  }
-
-  return <MainApp />;
+  return (
+    <>
+      <MainApp
+        guestMessages={guestMessages}
+        setGuestMessages={setGuestMessages}
+        setShowAuthModal={setShowAuthModal}
+      />
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+    </>
+  );
 }

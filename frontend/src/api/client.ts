@@ -23,12 +23,22 @@ export async function ingest(file: File) {
   form.append("file", file);
   const res = await fetch(`${API_BASE}/ingest`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     body: form,
   });
-  if (res.status === 401) { localStorage.removeItem("token"); localStorage.removeItem("user"); window.location.reload(); }
   if (!res.ok) throw new Error(`Ingest failed: ${res.status}`);
   return res.json() as Promise<{ status: string; chunks_ingested: number; filename: string }>;
+}
+
+export async function guestChat(message: string, history?: { role: string; content: string }[]) {
+  const body: Record<string, unknown> = { message };
+  if (history?.length) body.history = history;
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Chat failed: ${res.status}`);
+  return res.json() as Promise<{ response: string }>;
 }
 
 export type ChartPeriod = "1mo" | "3mo" | "6mo" | "1y";
@@ -107,21 +117,21 @@ async function authFetch(url: string, options?: RequestInit): Promise<Response> 
   return res;
 }
 
-export async function registerUser(username: string, email: string, password: string): Promise<TokenResponse> {
+export async function registerUser(email: string, password: string): Promise<TokenResponse> {
   const res = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error((await res.json()).detail || "Registration failed");
   return res.json();
 }
 
-export async function loginUser(username: string, password: string): Promise<TokenResponse> {
+export async function loginUser(email: string, password: string): Promise<TokenResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error((await res.json()).detail || "Login failed");
   return res.json();

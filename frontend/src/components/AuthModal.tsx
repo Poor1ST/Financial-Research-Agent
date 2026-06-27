@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-export default function AuthForm() {
+export default function AuthModal({ onClose }: { onClose: () => void }) {
   const { login, register } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,10 +15,11 @@ export default function AuthForm() {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(username, password);
+        await login(email, password);
       } else {
-        await register(username, email, password);
+        await register(email, password);
       }
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -28,8 +28,9 @@ export default function AuthForm() {
   }
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="auth-card" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>&times;</button>
         <div className="auth-logo">F</div>
         <h1 className="auth-title">Financial Research Terminal</h1>
         <p className="auth-subtitle">
@@ -39,22 +40,12 @@ export default function AuthForm() {
         <form onSubmit={handleSubmit} className="auth-form">
           <input
             className="auth-input"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            type="email"
+            placeholder="Email or Username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            minLength={3}
           />
-          {mode === "register" && (
-            <input
-              className="auth-input"
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          )}
           <input
             className="auth-input"
             type="password"

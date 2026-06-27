@@ -1,8 +1,8 @@
 import pytest
 
 
-def register_user(client, username="alice", email="a@b.com", password="secret123"):
-    return client.post("/api/auth/register", json={"username": username, "email": email, "password": password}).json()
+def register_user(client, email="a@b.com", password="secret123"):
+    return client.post("/api/auth/register", json={"email": email, "password": password}).json()
 
 
 def auth_header(token):
@@ -39,8 +39,8 @@ class TestListSessions:
         assert len(resp.json()) == 2
 
     def test_sessions_are_scoped_to_user(self, client):
-        alice = register_user(client, "alice", "a@b.com")
-        bob = register_user(client, "bob", "b@b.com", "pass456")
+        alice = register_user(client, "a@b.com")
+        bob = register_user(client, "b@b.com", "pass456")
         client.post("/api/auth/sessions", headers=auth_header(alice["access_token"]))
         bob_sessions = client.get("/api/auth/sessions", headers=auth_header(bob["access_token"]))
         assert bob_sessions.json() == []
@@ -61,8 +61,8 @@ class TestDeleteSession:
         assert resp.status_code == 404
 
     def test_cannot_delete_another_users_session(self, client):
-        alice = register_user(client, "alice", "a@b.com")
-        bob = register_user(client, "bob", "b@b.com", "pass456")
+        alice = register_user(client, "a@b.com")
+        bob = register_user(client, "b@b.com", "pass456")
         s = client.post("/api/auth/sessions", headers=auth_header(alice["access_token"])).json()
         resp = client.delete(f"/api/auth/sessions/{s['id']}", headers=auth_header(bob["access_token"]))
         assert resp.status_code == 404
@@ -82,8 +82,8 @@ class TestSessionMessages:
         assert resp.status_code == 401
 
     def test_cannot_get_messages_of_another_user(self, client):
-        alice = register_user(client, "alice", "a@b.com")
-        bob = register_user(client, "bob", "b@b.com", "pass456")
+        alice = register_user(client, "a@b.com")
+        bob = register_user(client, "b@b.com", "pass456")
         s = client.post("/api/auth/sessions", headers=auth_header(alice["access_token"])).json()
         resp = client.get(f"/api/auth/sessions/{s['id']}/messages", headers=auth_header(bob["access_token"]))
         assert resp.status_code == 404
