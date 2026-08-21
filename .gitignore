@@ -31,3 +31,9 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# SQLite chat DB
+backend/chat.db
+
+# ChromaDB (correct path — nested under app/)
+backend/app/chromadb_storage/
