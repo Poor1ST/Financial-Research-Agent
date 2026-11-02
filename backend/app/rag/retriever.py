@@ -2,7 +2,7 @@ import os
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
-CHROMA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "chromadb_storage")
+CHROMA_DIR = os.getenv("CHROMA_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "chromadb_storage"))
 
 
 def get_retriever():
